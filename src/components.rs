@@ -12,11 +12,15 @@ pub(crate) struct FixedDate(Date);
 pub(crate) struct ElapsedSince(Span);
 
 #[derive(Component, Default)]
-pub(crate) struct TotalDays(u64);
+pub(crate) struct TotalDays(i64);
 
 impl Display for TotalDays {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} days", self.0)
+        match self.0.cmp(&0) {
+            std::cmp::Ordering::Less => write!(f, "{} days away", -self.0),
+            std::cmp::Ordering::Equal => write!(f, "today"),
+            std::cmp::Ordering::Greater => write!(f, "{} days ago", self.0),
+        }
     }
 }
 
@@ -57,7 +61,7 @@ pub(crate) fn update_elapsed_since(mut query: Query<(&mut ElapsedSince, &FixedDa
 pub(crate) fn update_total_days(mut query: Query<(&mut TotalDays, &ElapsedSince)>) -> Result {
     let now = Zoned::now().date();
     for (mut total_days, span) in &mut query {
-        total_days.0 = span.0.total((Unit::Day, now))? as u64;
+        total_days.0 = span.0.total((Unit::Day, now))? as i64;
     }
     Ok(())
 }
@@ -65,7 +69,7 @@ pub(crate) fn update_total_days(mut query: Query<(&mut TotalDays, &ElapsedSince)
 pub(crate) fn update_span_parts(mut query: Query<(&mut SpanParts, &ElapsedSince)>) -> Result {
     let now = Zoned::now().date();
     for (mut span_parts, span) in &mut query {
-        let mut s = span.0;
+        let mut s = span.0.abs();
         let years = s.total((Unit::Year, now))? as i64;
         s = s.checked_sub((Span::new().years(years), now))?;
         let weeks = s.total((Unit::Week, now))? as i8;
