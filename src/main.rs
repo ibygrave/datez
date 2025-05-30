@@ -4,6 +4,7 @@ use bevy::MinimalPlugins;
 use bevy_app::{App, Plugin, PluginGroup, ScheduleRunnerPlugin, Startup, Update};
 use bevy_ecs::{
     component::Component,
+    error::Result,
     resource::Resource,
     schedule::IntoScheduleConfigs,
     system::{Commands, Query, Res},
@@ -40,31 +41,34 @@ struct DataSource {
 #[derive(Component)]
 struct DisplayLabel(String);
 
-fn update_elapsed_since(mut query: Query<(&mut ElapsedSince, &FixedDate)>) {
+fn update_elapsed_since(mut query: Query<(&mut ElapsedSince, &FixedDate)>) -> Result {
     let now = Zoned::now().date();
     for (mut since, date) in &mut query {
-        since.0 = Span::try_from(now.duration_since(date.0)).unwrap();
+        since.0 = Span::try_from(now.duration_since(date.0))?;
     }
+    Ok(())
 }
 
-fn update_total_days(mut query: Query<(&mut TotalDays, &ElapsedSince)>) {
+fn update_total_days(mut query: Query<(&mut TotalDays, &ElapsedSince)>) -> Result {
     let now = Zoned::now().date();
     for (mut total_days, span) in &mut query {
-        total_days.0 = span.0.total((Unit::Day, now)).unwrap() as u64;
+        total_days.0 = span.0.total((Unit::Day, now))? as u64;
     }
+    Ok(())
 }
 
-fn update_span_parts(mut query: Query<(&mut SpanParts, &ElapsedSince)>) {
+fn update_span_parts(mut query: Query<(&mut SpanParts, &ElapsedSince)>) -> Result {
     let now = Zoned::now().date();
     for (mut span_parts, span) in &mut query {
         let mut s = span.0;
-        let years = s.total((Unit::Year, now)).unwrap() as i64;
-        s = s.checked_sub((Span::new().years(years), now)).unwrap();
-        let weeks = s.total((Unit::Week, now)).unwrap() as i8;
-        s = s.checked_sub((Span::new().weeks(weeks), now)).unwrap();
-        let days = s.total((Unit::Day, now)).unwrap() as i8;
+        let years = s.total((Unit::Year, now))? as i64;
+        s = s.checked_sub((Span::new().years(years), now))?;
+        let weeks = s.total((Unit::Week, now))? as i8;
+        s = s.checked_sub((Span::new().weeks(weeks), now))?;
+        let days = s.total((Unit::Day, now))? as i8;
         *span_parts = SpanParts { years, weeks, days };
     }
+    Ok(())
 }
 
 fn print_total_days(query: Query<(&DisplayLabel, &TotalDays)>) {
@@ -100,13 +104,12 @@ impl Plugin for DatezPlugin {
     }
 }
 
-fn add_events(data_source: Res<DataSource>, mut commands: Commands) {
-    let stored: Vec<Stored> =
-        serde_json::from_reader(File::open(&data_source.filename).unwrap()).unwrap();
+fn add_events(data_source: Res<DataSource>, mut commands: Commands) -> Result {
+    let stored: Vec<Stored> = serde_json::from_reader(File::open(&data_source.filename)?)?;
     for entry in stored {
         match entry {
             Stored::FixedDate { label, date } => {
-                let date = Date::from_str(&date).unwrap();
+                let date = Date::from_str(&date)?;
                 commands.spawn((
                     DisplayLabel(label),
                     FixedDate(date),
@@ -117,6 +120,7 @@ fn add_events(data_source: Res<DataSource>, mut commands: Commands) {
             }
         }
     }
+    Ok(())
 }
 
 fn main() {
