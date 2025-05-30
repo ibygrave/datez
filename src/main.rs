@@ -33,6 +33,24 @@ enum Stored {
     FixedDate { label: String, date: String },
 }
 
+impl Stored {
+    fn add_event(self, commands: &mut Commands) -> Result {
+        match self {
+            Stored::FixedDate { label, date } => {
+                let date = Date::from_str(&date)?;
+                commands.spawn((
+                    DisplayLabel(label),
+                    FixedDate(date),
+                    ElapsedSince::default(),
+                    TotalDays::default(),
+                    SpanParts::default(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Resource)]
 struct DataSource {
     filename: PathBuf,
@@ -107,18 +125,7 @@ impl Plugin for DatezPlugin {
 fn add_events(data_source: Res<DataSource>, mut commands: Commands) -> Result {
     let stored: Vec<Stored> = serde_json::from_reader(File::open(&data_source.filename)?)?;
     for entry in stored {
-        match entry {
-            Stored::FixedDate { label, date } => {
-                let date = Date::from_str(&date)?;
-                commands.spawn((
-                    DisplayLabel(label),
-                    FixedDate(date),
-                    ElapsedSince::default(),
-                    TotalDays::default(),
-                    SpanParts::default(),
-                ));
-            }
-        }
+        entry.add_event(&mut commands)?;
     }
     Ok(())
 }
