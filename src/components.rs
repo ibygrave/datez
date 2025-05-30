@@ -4,9 +4,18 @@ use bevy_ecs::error::Result;
 use bevy_ecs::{bundle::Bundle, component::Component, system::Query};
 use jiff::{Span, civil::Date};
 use jiff::{Unit, Zoned};
+use serde::Deserialize;
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub(crate) struct FixedDate(Date);
+
+#[derive(Component, Deserialize)]
+pub(crate) struct NextOrPrevDate {
+    // offset from next occurence of the date.
+    count: i16,
+    month: i8,
+    day: i8,
+}
 
 #[derive(Component, Default)]
 pub(crate) struct ElapsedSince(Span);
@@ -50,7 +59,21 @@ impl Display for DisplayLabel {
     }
 }
 
-pub(crate) fn update_elapsed_since(mut query: Query<(&mut ElapsedSince, &FixedDate)>) -> Result {
+pub(crate) fn calculate_next_date(mut query: Query<(&mut FixedDate, &NextOrPrevDate)>) -> Result {
+    let now = Zoned::now().date();
+    let this_year = now.year();
+    for (mut next, date) in &mut query {
+        let adjust: i16 = if Date::new(this_year, date.month, date.day)? > now {
+            0
+        } else {
+            1
+        };
+        next.0 = Date::new(this_year + date.count + adjust, date.month, date.day)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn calculate_fixed_date(mut query: Query<(&mut ElapsedSince, &FixedDate)>) -> Result {
     let now = Zoned::now().date();
     for (mut since, date) in &mut query {
         since.0 = Span::try_from(now.duration_since(date.0))?;
@@ -84,6 +107,17 @@ pub(crate) fn fixed_date_bundle(label: String, date: Date) -> impl Bundle {
     (
         DisplayLabel(label),
         FixedDate(date),
+        ElapsedSince::default(),
+        TotalDays::default(),
+        SpanParts::default(),
+    )
+}
+
+pub(crate) fn next_or_prev_date_bundle(label: String, next_date: NextOrPrevDate) -> impl Bundle {
+    (
+        DisplayLabel(label),
+        next_date,
+        FixedDate::default(),
         ElapsedSince::default(),
         TotalDays::default(),
         SpanParts::default(),
